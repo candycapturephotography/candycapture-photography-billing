@@ -1,24 +1,73 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext.jsx'
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
 
+// Generate month options: current month + past 12 months + "All Time"
+const generateMonthOptions = () => {
+  const options = []
+  const now = new Date()
+  
+  // Add current month and past 12 months
+  for (let i = 0; i <= 12; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const month = date.getMonth()
+    const year = date.getFullYear()
+    const label = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+    options.push({ value: `${month}-${year}`, label, month, year })
+  }
+  
+  // Add "All Time" option at the end
+  options.push({ value: 'all', label: 'All Time', month: null, year: null })
+  
+  return options
+}
+
 export default function Dashboard() {
   const { getStats, invoices } = useApp()
   const navigate = useNavigate()
-  const stats = getStats()
+  
+  // Month filter state - default to current month
+  const now = new Date()
+  const [selectedMonth, setSelectedMonth] = useState(`${now.getMonth()}-${now.getFullYear()}`)
+  
+  const monthOptions = generateMonthOptions()
+  
+  // Parse selected month filter
+  const getMonthFilter = () => {
+    if (selectedMonth === 'all') return null
+    const [month, year] = selectedMonth.split('-').map(Number)
+    return { month, year }
+  }
+  
+  const monthFilter = getMonthFilter()
+  const stats = getStats(monthFilter)
+  
+  // Get period description for cards
+  const getPeriodDesc = () => {
+    if (selectedMonth === 'all') return 'All time'
+    const option = monthOptions.find(opt => opt.value === selectedMonth)
+    return option ? option.label : 'Selected period'
+  }
+  
+  // Filter invoices by eventDate based on selected month
+  const filterInvoicesByMonth = (invList) => {
+    if (!monthFilter) return invList
+    return invList.filter(inv => {
+      if (!inv.eventDate) return false
+      const eventDate = new Date(inv.eventDate)
+      return eventDate.getMonth() === monthFilter.month && eventDate.getFullYear() === monthFilter.year
+    })
+  }
 
+  // Dashboard cards based on Requirements 5.1, 5.2, 5.5:
+  // - Total Customers: count of unique customers
+  // - Total Income: sum of paidAmount (what the user has actually received)
+  // - Pending Amount: sum of (totalAmount - paidAmount) for all invoices
+  // - Upcoming Events: count of invoices with eventDate > today and status !== 'paid'
+  // - Monthly Total Events: count of invoices for the filtered month
   const cards = [
-    {
-      label: 'Total Invoices',
-      value: stats.totalInvoices,
-      icon: '🧾',
-      bg: 'linear-gradient(135deg, #be185d, #ec4899)',
-      link: '/invoices',
-      suffix: '',
-      desc: 'All invoices created',
-    },
     {
       label: 'Total Customers',
       value: stats.totalCustomers,
@@ -29,36 +78,46 @@ export default function Dashboard() {
       desc: 'Registered customers',
     },
     {
-      label: 'Total Revenue',
-      value: fmt(stats.totalRevenue),
+      label: 'Total Income',
+      value: fmt(stats.totalIncome),
       icon: '💰',
       bg: 'linear-gradient(135deg, #065f46, #10b981)',
       link: '/payments',
       suffix: '',
-      desc: 'Gross booking value',
+      desc: getPeriodDesc(),
     },
     {
-      label: 'Pending Payment',
-      value: fmt(stats.pendingPayment),
+      label: 'Pending Amount',
+      value: fmt(stats.pendingAmount),
       icon: '⏳',
       bg: 'linear-gradient(135deg, #b45309, #f59e0b)',
       link: '/payments',
       suffix: '',
-      desc: 'Amount yet to collect',
+      desc: getPeriodDesc(),
     },
     {
       label: 'Upcoming Events',
-      value: stats.upcomingPayments,
+      value: stats.upcomingEvents,
       icon: '📅',
       bg: 'linear-gradient(135deg, #1d4ed8, #60a5fa)',
       link: '/invoices',
       suffix: '',
-      desc: 'Future bookings',
+      desc: 'Events pending payment',
+    },
+    {
+      label: 'Monthly Total Events',
+      value: stats.monthlyTotalEvents,
+      icon: '🧾',
+      bg: 'linear-gradient(135deg, #be185d, #ec4899)',
+      link: '/invoices',
+      suffix: '',
+      desc: getPeriodDesc(),
     },
   ]
 
-  // Recent invoices
-  const recent = invoices.slice(0, 5)
+  // Recent invoices - filtered by month
+  const filteredInvoices = filterInvoicesByMonth(invoices)
+  const recent = filteredInvoices.slice(0, 5)
 
   const statusBadge = (status) => {
     const map = {
@@ -82,9 +141,24 @@ export default function Dashboard() {
           <h1 style={s.title}>Dashboard</h1>
           <p style={s.subtitle}>Welcome back! Here's your studio overview.</p>
         </div>
-        <button style={s.newBtn} onClick={() => navigate('/invoices/new')}>
-          + New Invoice
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          {/* Month Filter */}
+          <div style={s.filterContainer}>
+            <label style={s.filterLabel}>Period:</label>
+            <select
+              style={s.filterSelect}
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              {monthOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <button style={s.newBtn} onClick={() => navigate('/invoices/new')}>
+            + New Invoice
+          </button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -113,14 +187,16 @@ export default function Dashboard() {
       {/* Recent Invoices */}
       <div style={s.section}>
         <div style={s.sectionHeader}>
-          <h2 style={s.sectionTitle}>Recent Invoices</h2>
+          <h2 style={s.sectionTitle}>Recent Invoices {selectedMonth !== 'all' && `(${getPeriodDesc()})`}</h2>
           <button style={s.viewAllBtn} onClick={() => navigate('/invoices')}>View All</button>
         </div>
         {recent.length === 0 ? (
           <div style={s.empty}>
             <div style={{ fontSize: '3rem' }}>📋</div>
-            <div style={{ marginTop: '12px', color: '#9d174d', fontWeight: '500' }}>No invoices yet</div>
-            <div style={{ color: '#9ca3af', fontSize: '0.875rem', marginTop: '4px' }}>Create your first invoice to get started</div>
+            <div style={{ marginTop: '12px', color: '#9d174d', fontWeight: '500' }}>No invoices {selectedMonth !== 'all' ? 'for this period' : 'yet'}</div>
+            <div style={{ color: '#9ca3af', fontSize: '0.875rem', marginTop: '4px' }}>
+              {selectedMonth !== 'all' ? 'Try selecting a different period or create a new invoice' : 'Create your first invoice to get started'}
+            </div>
             <button style={{ ...s.newBtn, marginTop: '16px' }} onClick={() => navigate('/invoices/new')}>+ Create Invoice</button>
           </div>
         ) : (
@@ -167,6 +243,19 @@ const s = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' },
   title: { fontSize: '1.75rem', fontWeight: '700', color: '#831843' },
   subtitle: { color: '#9d174d', marginTop: '4px', fontSize: '0.9rem' },
+  filterContainer: { display: 'flex', alignItems: 'center', gap: '8px' },
+  filterLabel: { fontSize: '0.875rem', fontWeight: '600', color: '#831843' },
+  filterSelect: {
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: '2px solid #fce7f3',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    color: '#831843',
+    background: '#fff',
+    cursor: 'pointer',
+    minWidth: '160px',
+  },
   newBtn: {
     background: 'linear-gradient(135deg, #be185d, #ec4899)',
     color: '#fff', border: 'none', borderRadius: '10px',

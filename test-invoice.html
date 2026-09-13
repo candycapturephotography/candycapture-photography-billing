@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate Test Invoice</title>
+  <style>
+    body { font-family: Arial; padding: 40px; background: #fdf2f8; text-align: center; }
+    button { background: linear-gradient(135deg, #be185d, #ec4899); color: white; border: none; 
+             padding: 20px 40px; font-size: 18px; border-radius: 12px; cursor: pointer; margin: 20px; }
+    button:hover { transform: scale(1.05); }
+    .info { background: white; padding: 20px; border-radius: 12px; margin: 20px auto; max-width: 500px; text-align: left; }
+    #status { margin-top: 20px; padding: 15px; border-radius: 8px; }
+    .loading { background: #fef3c7; color: #92400e; }
+    .success { background: #d1fae5; color: #065f46; }
+    .error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1 style="color: #831843;">Elegant Invoice Preview</h1>
+  <p style="color: #9d174d;">Click the button below to generate a sample invoice</p>
+  
+  <div id="status" class="loading">Loading jsPDF library... Please wait.</div>
+  
+  <button id="genBtn" onclick="generateInvoice()" disabled>Generate Sample Invoice PDF</button>
+  
+  <div class="info">
+    <h3 style="color: #be185d;">Sample Invoice Details:</h3>
+    <p><strong>Customer:</strong> Priya Sharma</p>
+    <p><strong>Event:</strong> Wedding Photography</p>
+    <p><strong>Date:</strong> 15 February 2025</p>
+    <p><strong>Package:</strong> Premium Wedding Package</p>
+    <p><strong>Total:</strong> Rs. 75,000</p>
+    <p><strong>Advance:</strong> Rs. 25,000</p>
+    <p><strong>Balance:</strong> Rs. 50,000</p>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    // Wait for jsPDF to load
+    function checkLibrary() {
+      if (window.jspdf && window.jspdf.jsPDF) {
+        document.getElementById('status').className = 'success';
+        document.getElementById('status').innerHTML = 'Ready! Click the button to generate PDF.';
+        document.getElementById('genBtn').disabled = false;
+      } else {
+        setTimeout(checkLibrary, 500);
+      }
+    }
+    
+    // Start checking after page loads
+    window.onload = function() {
+      setTimeout(checkLibrary, 1000);
+      
+      // Fallback timeout
+      setTimeout(function() {
+        if (document.getElementById('genBtn').disabled) {
+          document.getElementById('status').className = 'error';
+          document.getElementById('status').innerHTML = 'Library failed to load. Please try: <br>1. Refresh the page (F5)<br>2. Check your internet connection<br>3. Try in Chrome/Edge browser';
+        }
+      }, 10000);
+    };
+    
+    function generateInvoice() {
+      try {
+        document.getElementById('status').className = 'loading';
+        document.getElementById('status').innerHTML = 'Generating PDF...';
+        
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+        const W = 210;
+        const M = 20;
+        
+        // Colors
+        const PINK_ACCENT = [219, 112, 147];
+        const PINK_LIGHT = [255, 240, 245];
+        const PINK_MEDIUM = [255, 228, 235];
+        const PINK_SOFT = [252, 243, 246];
+        const WHITE = [255, 255, 255];
+        const TEXT_DARK = [60, 60, 70];
+        const TEXT_MED = [120, 120, 130];
+        const TEXT_LIGHT = [160, 160, 170];
+        const GREEN = [76, 175, 130];
+        
+        // Background
+        doc.setFillColor(...WHITE);
+        doc.rect(0, 0, W, 297, 'F');
+        
+        // Header band
+        doc.setFillColor(...PINK_LIGHT);
+        doc.rect(0, 0, W, 55, 'F');
+        
+        // Accent line
+        doc.setDrawColor(...PINK_ACCENT);
+        doc.setLineWidth(0.8);
+        doc.line(0, 55, W, 55);
+        
+        // Corner circle
+        doc.setFillColor(...PINK_MEDIUM);
+        doc.circle(W + 20, -20, 60, 'F');
+        
+        // Studio name
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('Candy Capture Photography', M, 18);
+        
+        // Underline
+        doc.setDrawColor(...PINK_ACCENT);
+        doc.setLineWidth(0.5);
+        doc.line(M, 21, M + 45, 21);
+        
+        // Contact
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...TEXT_MED);
+        doc.text('123 Camera Street, T Nagar, Chennai - 600017', M, 28);
+        doc.text('Phone: +91 99887 76655', M, 32.5);
+        doc.text('Email: hello@candycapture.com', M, 37);
+        doc.text('Instagram: @candycapturephotography', M, 41.5);
+        
+        // INVOICE
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(28);
+        doc.setTextColor(...PINK_ACCENT);
+        doc.text('INVOICE', W - M, 22, { align: 'right' });
+        
+        // Invoice number
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(...TEXT_MED);
+        doc.text('CCP-2025-0042', W - M, 30, { align: 'right' });
+        
+        // Status
+        doc.setFillColor(230, 170, 90);
+        doc.roundedRect(W - M - 28, 35, 28, 8, 4, 4, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(...WHITE);
+        doc.text('PARTIAL', W - M - 14, 40.5, { align: 'center' });
+        
+        // Bill To card
+        let y = 65;
+        doc.setFillColor(...WHITE);
+        doc.setDrawColor(...PINK_MEDIUM);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(M, y, 82, 38, 4, 4, 'FD');
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(...PINK_ACCENT);
+        doc.text('BILL TO', M + 6, y + 8);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('Priya Sharma', M + 6, y + 17);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(...TEXT_MED);
+        doc.text('+91 98765 43210', M + 6, y + 24);
+        doc.text('priya.sharma@email.com', M + 6, y + 30);
+        
+        // Event card
+        doc.setFillColor(...WHITE);
+        doc.roundedRect(M + 88, y, 82, 38, 4, 4, 'FD');
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(...PINK_ACCENT);
+        doc.text('EVENT DETAILS', M + 94, y + 8);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('Wedding', M + 94, y + 16);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(...TEXT_MED);
+        doc.text('Sat, 15 Feb 2025', M + 94, y + 23);
+        doc.text('Grand Palace Hall, Chennai', M + 94, y + 30);
+        
+        // Table
+        y = 112;
+        doc.setFillColor(...PINK_LIGHT);
+        doc.rect(M, y, W - M * 2, 10, 'F');
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('DESCRIPTION', M + 6, y + 7);
+        doc.text('AMOUNT', W - M - 6, y + 7, { align: 'right' });
+        
+        y += 10;
+        doc.setFillColor(...WHITE);
+        doc.rect(M, y, W - M * 2, 22, 'F');
+        doc.setDrawColor(...PINK_MEDIUM);
+        doc.line(M, y + 22, W - M, y + 22);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('Premium Wedding Package', M + 6, y + 9);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...TEXT_LIGHT);
+        doc.text('Full day coverage, 2 photographers, drone, 500+ photos, video, album', M + 6, y + 17);
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('Rs. 75,000', W - M - 6, y + 9, { align: 'right' });
+        
+        // Totals
+        y += 26;
+        const tX = W - M - 75;
+        doc.setFillColor(...PINK_SOFT);
+        doc.roundedRect(tX, y, 75, 38, 3, 3, 'F');
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(...TEXT_MED);
+        doc.text('Total Amount', tX + 6, y + 10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('Rs. 75,000', tX + 69, y + 10, { align: 'right' });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...TEXT_MED);
+        doc.text('Advance Paid', tX + 6, y + 19);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...GREEN);
+        doc.text('- Rs. 25,000', tX + 69, y + 19, { align: 'right' });
+        
+        doc.setDrawColor(...PINK_ACCENT);
+        doc.line(tX + 6, y + 24, tX + 69, y + 24);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(...PINK_ACCENT);
+        doc.text('Balance Due', tX + 6, y + 33);
+        doc.setFontSize(12);
+        doc.text('Rs. 50,000', tX + 69, y + 33, { align: 'right' });
+        
+        // Payment history
+        y += 45;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...PINK_ACCENT);
+        doc.text('PAYMENT HISTORY', M, y);
+        y += 6;
+        
+        doc.setFillColor(...PINK_LIGHT);
+        doc.rect(M, y, W - M * 2, 8, 'F');
+        doc.setFontSize(7);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('#', M + 4, y + 5.5);
+        doc.text('Date', M + 14, y + 5.5);
+        doc.text('Amount', M + 55, y + 5.5);
+        doc.text('Note', M + 90, y + 5.5);
+        y += 8;
+        
+        // Payment 1
+        doc.setFillColor(...WHITE);
+        doc.rect(M, y, W - M * 2, 7, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('1', M + 4, y + 5);
+        doc.text('20/12/2024', M + 14, y + 5);
+        doc.setTextColor(...GREEN);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Rs. 15,000', M + 55, y + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...TEXT_LIGHT);
+        doc.text('Booking advance', M + 90, y + 5);
+        y += 7;
+        
+        // Payment 2
+        doc.setFillColor(...PINK_SOFT);
+        doc.rect(M, y, W - M * 2, 7, 'F');
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('2', M + 4, y + 5);
+        doc.text('10/01/2025', M + 14, y + 5);
+        doc.setTextColor(...GREEN);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Rs. 10,000', M + 55, y + 5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...TEXT_LIGHT);
+        doc.text('Second installment', M + 90, y + 5);
+        y += 12;
+        
+        // Notes
+        doc.setFillColor(...PINK_SOFT);
+        doc.roundedRect(M, y, W - M * 2, 20, 3, 3, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(...PINK_ACCENT);
+        doc.text('NOTES', M + 6, y + 7);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...TEXT_MED);
+        doc.text('Please arrive 2 hours before ceremony. Contact coordinator: Ravi - 9876543210', M + 6, y + 14);
+        
+        // Footer
+        const fY = 265;
+        doc.setFillColor(...PINK_LIGHT);
+        doc.rect(0, fY, W, 32, 'F');
+        doc.setDrawColor(...PINK_ACCENT);
+        doc.line(0, fY, W, fY);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(...TEXT_DARK);
+        doc.text('Thank you for choosing us!', W / 2, fY + 10, { align: 'center' });
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(...PINK_ACCENT);
+        doc.text('Candy Capture Photography', W / 2, fY + 20, { align: 'center' });
+        
+        doc.setDrawColor(...PINK_ACCENT);
+        doc.line(W / 2 - 35, fY + 23, W / 2 + 35, fY + 23);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(...TEXT_LIGHT);
+        doc.text('Authorized Signature', W / 2, fY + 28, { align: 'center' });
+        
+        // Save
+        doc.save('Sample_Invoice_CCP-2025-0042.pdf');
+        
+        document.getElementById('status').className = 'success';
+        document.getElementById('status').innerHTML = 'PDF Generated! Check your Downloads folder for: Sample_Invoice_CCP-2025-0042.pdf';
+        
+      } catch (err) {
+        document.getElementById('status').className = 'error';
+        document.getElementById('status').innerHTML = 'Error: ' + err.message + '<br>Please refresh and try again.';
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>

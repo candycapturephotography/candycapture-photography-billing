@@ -1,99 +1,185 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { ConfigProvider } from './context/ConfigContext.jsx'
+import { AuthProvider } from './context/AuthContext.jsx'
 import { AppProvider } from './context/AppContext.jsx'
+import ProtectedRoute from './components/Auth/ProtectedRoute.jsx'
+import AdminRoute from './components/Auth/AdminRoute.jsx'
+import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Invoices from './pages/Invoices.jsx'
 import InvoiceCreate from './pages/InvoiceCreate.jsx'
+import NewInvoice from './pages/NewInvoice.jsx'
 import InvoiceView from './pages/InvoiceView.jsx'
 import Customers from './pages/Customers.jsx'
 import CustomerDetail from './pages/CustomerDetail.jsx'
 import Services from './pages/Services.jsx'
 import Payments from './pages/Payments.jsx'
 import Settings from './pages/Settings.jsx'
+import Sidebar from './components/Layout/Sidebar.jsx'
+import { MobileSidebar, useIsMobile } from './components/Layout/MobileSidebar.jsx'
 
-function Sidebar() {
-  const location = useLocation()
-  const links = [
-    { to: '/', label: 'Dashboard', icon: '🏠' },
-    { to: '/invoices', label: 'Invoices', icon: '🧾' },
-    { to: '/customers', label: 'Customers', icon: '👥' },
-    { to: '/payments', label: 'Payments', icon: '💰' },
-    { to: '/services', label: 'Services', icon: '📋' },
-    { to: '/settings', label: 'Studio Info', icon: '⚙️' },
-  ]
-
-  return (
-    <aside style={styles.sidebar}>
-      {/* Logo */}
-      <div style={styles.logo}>
-        <div style={styles.logoIcon}>📸</div>
-        <div>
-          <div style={styles.logoTitle}>Candy Capture</div>
-          <div style={styles.logoSub}>Photography</div>
-        </div>
-      </div>
-
-      {/* Nav */}
-      <nav style={styles.nav}>
-        {links.map(link => {
-          const isActive = link.to === '/'
-            ? location.pathname === '/'
-            : location.pathname.startsWith(link.to)
-          return (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              style={{ textDecoration: 'none' }}
-            >
-              <div style={{ ...styles.navItem, ...(isActive ? styles.navItemActive : {}) }}>
-                <span style={styles.navIcon}>{link.icon}</span>
-                <span style={styles.navLabel}>{link.label}</span>
-              </div>
-            </NavLink>
-          )
-        })}
-      </nav>
-
-      <div style={styles.sidebarFooter}>
-        <div style={{ fontSize: '0.7rem', color: '#f9a8d4', textAlign: 'center' }}>
-          © 2024 Candy Capture Photography
-        </div>
-      </div>
-    </aside>
-  )
-}
-
+/**
+ * Layout Component
+ * 
+ * Provides the main application layout with sidebar navigation.
+ * Adapts to mobile viewports by switching to a mobile drawer sidebar.
+ */
 function Layout({ children }) {
+  const isMobile = useIsMobile()
+  
   return (
     <div style={styles.layout}>
-      <Sidebar />
-      <main style={styles.main}>
+      {/* Desktop Sidebar - hidden on mobile */}
+      {!isMobile && <Sidebar />}
+      
+      {/* Mobile Sidebar - shown only on mobile */}
+      <MobileSidebar />
+      
+      <main style={{
+        ...styles.main,
+        marginLeft: isMobile ? 0 : '240px',
+        paddingTop: isMobile ? '68px' : 0, // Space for hamburger button
+      }}>
         {children}
       </main>
     </div>
   )
 }
 
+/**
+ * ProtectedLayout Component
+ * 
+ * Wraps the Layout with ProtectedRoute to ensure authentication.
+ * All routes except /login use this wrapper.
+ */
+function ProtectedLayout({ children }) {
+  return (
+    <ProtectedRoute>
+      <Layout>
+        {children}
+      </Layout>
+    </ProtectedRoute>
+  )
+}
+
+/**
+ * App Component
+ * 
+ * Main application component with provider hierarchy and routing.
+ * 
+ * Provider Hierarchy: ConfigProvider > AuthProvider > AppProvider
+ * - ConfigProvider: Environment-driven configuration
+ * - AuthProvider: Authentication and user management
+ * - AppProvider: Business logic (invoices, customers, services, packages)
+ * 
+ * Routing:
+ * - /login: Public route for authentication
+ * - /: Dashboard (entry screen after login) - protected
+ * - All other routes: Protected, require authentication
+ * - Admin routes (/settings/admin-password, /settings/users): Admin only
+ * 
+ * Validates: Requirements 1.1, 2.7, 21.1
+ * - 1.1: Unauthenticated users are redirected to login
+ * - 2.7: Non-admin users cannot access User Management or Admin Password
+ * - 21.1: Dashboard is the entry screen after login
+ */
 export default function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/invoices" element={<Invoices />} />
-            <Route path="/invoices/new" element={<InvoiceCreate />} />
-            <Route path="/invoices/:id" element={<InvoiceView />} />
-            <Route path="/invoices/:id/edit" element={<InvoiceCreate />} />
-            <Route path="/customers" element={<Customers />} />
-            <Route path="/customers/:id" element={<CustomerDetail />} />
-            <Route path="/payments" element={<Payments />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </Layout>
-      </BrowserRouter>
-    </AppProvider>
+    <ConfigProvider>
+      <AuthProvider>
+        <AppProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public route - Login page */}
+              <Route path="/login" element={<Login />} />
+              
+              {/* Protected routes - require authentication */}
+              {/* Dashboard is the entry screen after login (Requirement 21.1) */}
+              <Route path="/" element={
+                <ProtectedLayout>
+                  <Dashboard />
+                </ProtectedLayout>
+              } />
+              
+              {/* Invoice routes */}
+              <Route path="/invoices" element={
+                <ProtectedLayout>
+                  <Invoices />
+                </ProtectedLayout>
+              } />
+              <Route path="/invoices/new" element={
+                <ProtectedLayout>
+                  <NewInvoice />
+                </ProtectedLayout>
+              } />
+              <Route path="/invoices/:id" element={
+                <ProtectedLayout>
+                  <InvoiceView />
+                </ProtectedLayout>
+              } />
+              <Route path="/invoices/:id/edit" element={
+                <ProtectedLayout>
+                  <InvoiceCreate />
+                </ProtectedLayout>
+              } />
+              
+              {/* Customer routes */}
+              <Route path="/customers" element={
+                <ProtectedLayout>
+                  <Customers />
+                </ProtectedLayout>
+              } />
+              <Route path="/customers/:id" element={
+                <ProtectedLayout>
+                  <CustomerDetail />
+                </ProtectedLayout>
+              } />
+              
+              {/* Other routes */}
+              <Route path="/payments" element={
+                <ProtectedLayout>
+                  <Payments />
+                </ProtectedLayout>
+              } />
+              <Route path="/services" element={
+                <ProtectedLayout>
+                  <Services />
+                </ProtectedLayout>
+              } />
+              
+              {/* Settings routes */}
+              <Route path="/settings" element={
+                <ProtectedLayout>
+                  <Settings />
+                </ProtectedLayout>
+              } />
+              <Route path="/settings/profile" element={
+                <ProtectedLayout>
+                  <Settings />
+                </ProtectedLayout>
+              } />
+              
+              {/* Admin-only settings routes (Requirement 2.7) */}
+              <Route path="/settings/admin-password" element={
+                <ProtectedLayout>
+                  <AdminRoute>
+                    <Settings />
+                  </AdminRoute>
+                </ProtectedLayout>
+              } />
+              <Route path="/settings/users" element={
+                <ProtectedLayout>
+                  <AdminRoute>
+                    <Settings />
+                  </AdminRoute>
+                </ProtectedLayout>
+              } />
+            </Routes>
+          </BrowserRouter>
+        </AppProvider>
+      </AuthProvider>
+    </ConfigProvider>
   )
 }
 
@@ -101,79 +187,6 @@ const styles = {
   layout: {
     display: 'flex',
     minHeight: '100vh',
-  },
-  sidebar: {
-    width: '240px',
-    minHeight: '100vh',
-    background: 'linear-gradient(180deg, #831843 0%, #9d174d 40%, #be185d 100%)',
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    zIndex: 100,
-    boxShadow: '4px 0 20px rgba(131,24,67,0.3)',
-  },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '24px 20px 20px',
-    borderBottom: '1px solid rgba(249,168,212,0.2)',
-    marginBottom: '8px',
-  },
-  logoIcon: {
-    fontSize: '2rem',
-    background: 'rgba(255,255,255,0.15)',
-    borderRadius: '12px',
-    padding: '6px 8px',
-  },
-  logoTitle: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: '0.95rem',
-    lineHeight: '1.2',
-  },
-  logoSub: {
-    color: '#f9a8d4',
-    fontSize: '0.75rem',
-    fontWeight: '400',
-  },
-  nav: {
-    flex: 1,
-    padding: '8px 12px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  navItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '10px 12px',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-    color: '#fce7f3',
-  },
-  navItemActive: {
-    background: 'rgba(255,255,255,0.2)',
-    color: '#ffffff',
-    fontWeight: '600',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-  },
-  navIcon: {
-    fontSize: '1.1rem',
-    width: '22px',
-    textAlign: 'center',
-  },
-  navLabel: {
-    fontSize: '0.875rem',
-  },
-  sidebarFooter: {
-    padding: '16px 12px',
-    borderTop: '1px solid rgba(249,168,212,0.2)',
   },
   main: {
     flex: 1,
