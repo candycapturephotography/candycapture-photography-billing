@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { to: '/customers', label: 'Customer Info', icon: '👥' },
   { to: '/invoices', label: 'Invoices', icon: '🧾' },
   { to: '/services', label: 'Services', icon: '📋' },
+  { to: '/reports', label: 'Reports', icon: '📊' },
 ]
 
 const SETTINGS_SUB_ITEMS = [
@@ -246,3 +247,4 @@ const styles = {
 }
 
 export default MobileSidebar
+
