@@ -43,17 +43,6 @@ const DEFAULT_PACKAGES = [
       { id: 'sp1_1', name: 'Traditional Photography', quantity: 1, sortOrder: 1 },
       { id: 'sp1_2', name: 'Traditional Videography', quantity: 1, sortOrder: 2 },
       { id: 'sp1_3', name: 'Candid Photography', quantity: 1, sortOrder: 3 },
-      { id: 'sp1_4', name: 'Pre Wedding Photo', quantity: 1, sortOrder: 4 },
-      { id: 'sp1_5', name: '200 Photos & 50 Sheet Premium Album', quantity: 1, sortOrder: 5 },
-    ],
-  },
-  { 
-    id: 'seed_p2', name: 'PREMIUM PACKAGE 2', price: 45000,
-    description: 'Standard wedding coverage', active: true,
-    services: [
-      { id: 'sp2_1', name: 'Traditional Photography', quantity: 1, sortOrder: 1 },
-      { id: 'sp2_2', name: 'Traditional Videography', quantity: 1, sortOrder: 2 },
-      { id: 'sp2_3', name: 'Pre Wedding Photo', quantity: 1, sortOrder: 3 },
     ],
   },
 ]
@@ -61,11 +50,10 @@ const DEFAULT_PACKAGES = [
 export function AppProvider({ children }) {
   const [invoices, setInvoices] = useState([])
   const [customers, setCustomers] = useState([])
-  const [services, setServices] = useState([])
-  const [packages, setPackages] = useState([])
+  const [services, setServices] = useState(DEFAULT_SERVICES)
+  const [packages, setPackages] = useState(DEFAULT_PACKAGES)
   const [studio, setStudioState] = useState(DEFAULT_STUDIO)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
 
   // Load all data from Supabase on mount
   useEffect(() => {
@@ -74,14 +62,13 @@ export function AppProvider({ children }) {
 
   const loadAllData = async () => {
     setLoading(true)
-    setError(null)
     try {
       const [inv, cust, serv, pkg, stud] = await Promise.all([
-        db.getInvoices().catch(() => []),
-        db.getCustomers().catch(() => []),
-        db.getServices().catch(() => []),
-        db.getPackages().catch(() => []),
-        db.getStudio().catch(() => null),
+        db.getInvoices().catch(e => { console.log('Load invoices error:', e); return [] }),
+        db.getCustomers().catch(e => { console.log('Load customers error:', e); return [] }),
+        db.getServices().catch(e => { console.log('Load services error:', e); return [] }),
+        db.getPackages().catch(e => { console.log('Load packages error:', e); return [] }),
+        db.getStudio().catch(e => { console.log('Load studio error:', e); return null }),
       ])
       
       setInvoices(inv || [])
@@ -89,24 +76,8 @@ export function AppProvider({ children }) {
       setServices(serv.length > 0 ? serv : DEFAULT_SERVICES)
       setPackages(pkg.length > 0 ? pkg : DEFAULT_PACKAGES)
       setStudioState(stud || DEFAULT_STUDIO)
-      
-      // Initialize default data if empty
-      if (serv.length === 0) {
-        for (const s of DEFAULT_SERVICES) {
-          await db.upsertService(s).catch(() => {})
-        }
-      }
-      if (pkg.length === 0) {
-        for (const p of DEFAULT_PACKAGES) {
-          await db.upsertPackage(p).catch(() => {})
-        }
-      }
-      if (!stud) {
-        await db.saveStudio(DEFAULT_STUDIO).catch(() => {})
-      }
     } catch (err) {
       console.error('Error loading data:', err)
-      setError(err.message)
     } finally {
       setLoading(false)
     }
@@ -139,43 +110,45 @@ export function AppProvider({ children }) {
       }] : [],
     }
 
+    // Update local state first for immediate UI response
+    setInvoices(prev => [newInvoice, ...prev])
+    
+    // Then save to database
     try {
       await db.addInvoice(newInvoice)
-      setInvoices(prev => [newInvoice, ...prev])
-      
       // Auto-add customer
       await upsertCustomer({
         name: invoiceData.customerName,
         mobile: invoiceData.customerMobile,
         email: invoiceData.customerEmail || '',
       }, newInvoice.id)
-      
-      return newInvoice
     } catch (err) {
-      console.error('Error adding invoice:', err)
-      throw err
+      console.error('Error saving invoice:', err)
     }
+    
+    return newInvoice
   }, [packages, studio, invoices])
 
   const updateInvoice = useCallback(async (id, data) => {
+    const invoice = invoices.find(inv => inv.id === id)
+    if (!invoice) return
+    
+    const merged = { ...invoice, ...data }
+    merged.status = calcStatus(merged.totalAmount, merged.paidAmount)
+    
+    setInvoices(prev => prev.map(inv => inv.id === id ? merged : inv))
+    
     try {
-      const invoice = invoices.find(inv => inv.id === id)
-      if (!invoice) return
-      
-      const merged = { ...invoice, ...data }
-      merged.status = calcStatus(merged.totalAmount, merged.paidAmount)
-      
       await db.updateInvoice(id, merged)
-      setInvoices(prev => prev.map(inv => inv.id === id ? merged : inv))
     } catch (err) {
       console.error('Error updating invoice:', err)
     }
   }, [invoices])
 
   const deleteInvoice = useCallback(async (id) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== id))
     try {
       await db.deleteInvoice(id)
-      setInvoices(prev => prev.filter(inv => inv.id !== id))
     } catch (err) {
       console.error('Error deleting invoice:', err)
     }
@@ -202,9 +175,10 @@ export function AppProvider({ children }) {
       status: calcStatus(invoice.totalAmount, totalPaid),
     }
 
+    setInvoices(prev => prev.map(inv => inv.id === invoiceId ? updated : inv))
+    
     try {
       await db.updateInvoice(invoiceId, updated)
-      setInvoices(prev => prev.map(inv => inv.id === invoiceId ? updated : inv))
     } catch (err) {
       console.error('Error adding payment:', err)
     }
@@ -217,49 +191,53 @@ export function AppProvider({ children }) {
       (c.name?.toLowerCase() === data.name?.toLowerCase())
     )
 
-    try {
-      if (existing) {
-        const invoiceIds = existing.invoiceIds || []
-        const updated = {
-          ...existing,
-          email: data.email || existing.email,
-          invoiceIds: invoiceIds.includes(invoiceId) ? invoiceIds : [...invoiceIds, invoiceId],
-        }
-        await db.upsertCustomer(updated)
-        setCustomers(prev => prev.map(c => c.id === existing.id ? updated : c))
-      } else {
-        const newCustomer = {
-          id: Date.now().toString(),
-          name: data.name,
-          mobile: data.mobile,
-          email: data.email || '',
-          invoiceIds: invoiceId ? [invoiceId] : [],
-          createdAt: new Date().toISOString(),
-        }
-        await db.upsertCustomer(newCustomer)
-        setCustomers(prev => [newCustomer, ...prev])
+    if (existing) {
+      const invoiceIds = existing.invoiceIds || []
+      const updated = {
+        ...existing,
+        email: data.email || existing.email,
+        invoiceIds: invoiceIds.includes(invoiceId) ? invoiceIds : [...invoiceIds, invoiceId],
       }
-    } catch (err) {
-      console.error('Error upserting customer:', err)
+      setCustomers(prev => prev.map(c => c.id === existing.id ? updated : c))
+      try {
+        await db.upsertCustomer(updated)
+      } catch (err) {
+        console.error('Error updating customer:', err)
+      }
+    } else {
+      const newCustomer = {
+        id: Date.now().toString(),
+        name: data.name,
+        mobile: data.mobile,
+        email: data.email || '',
+        invoiceIds: invoiceId ? [invoiceId] : [],
+        createdAt: new Date().toISOString(),
+      }
+      setCustomers(prev => [newCustomer, ...prev])
+      try {
+        await db.upsertCustomer(newCustomer)
+      } catch (err) {
+        console.error('Error adding customer:', err)
+      }
     }
   }, [customers])
 
   const updateCustomer = useCallback(async (id, data) => {
+    const customer = customers.find(c => c.id === id)
+    if (!customer) return
+    const updated = { ...customer, ...data }
+    setCustomers(prev => prev.map(c => c.id === id ? updated : c))
     try {
-      const customer = customers.find(c => c.id === id)
-      if (!customer) return
-      const updated = { ...customer, ...data }
       await db.upsertCustomer(updated)
-      setCustomers(prev => prev.map(c => c.id === id ? updated : c))
     } catch (err) {
       console.error('Error updating customer:', err)
     }
   }, [customers])
 
   const deleteCustomer = useCallback(async (id) => {
+    setCustomers(prev => prev.filter(c => c.id !== id))
     try {
       await db.deleteCustomer(id)
-      setCustomers(prev => prev.filter(c => c.id !== id))
     } catch (err) {
       console.error('Error deleting customer:', err)
     }
@@ -268,37 +246,38 @@ export function AppProvider({ children }) {
   // Service actions
   const addService = useCallback(async (data) => {
     const newService = { ...data, id: Date.now().toString(), active: true }
+    setServices(prev => [...prev, newService])
     try {
       await db.upsertService(newService)
-      setServices(prev => [...prev, newService])
     } catch (err) {
       console.error('Error adding service:', err)
     }
   }, [])
 
   const updateService = useCallback(async (id, data) => {
+    const service = services.find(s => s.id === id)
+    if (!service) return
+    const updated = { ...service, ...data }
+    setServices(prev => prev.map(s => s.id === id ? updated : s))
     try {
-      const service = services.find(s => s.id === id)
-      if (!service) return
-      const updated = { ...service, ...data }
       await db.upsertService(updated)
-      setServices(prev => prev.map(s => s.id === id ? updated : s))
     } catch (err) {
       console.error('Error updating service:', err)
     }
   }, [services])
 
   const deleteService = useCallback(async (id) => {
+    setServices(prev => prev.filter(s => s.id !== id))
     try {
       await db.deleteService(id)
-      setServices(prev => prev.filter(s => s.id !== id))
     } catch (err) {
       console.error('Error deleting service:', err)
     }
   }, [])
 
-  // Package actions
+  // Package actions - FIXED
   const addPackage = useCallback(async (data) => {
+    console.log('Adding package:', data)
     const now = new Date().toISOString()
     const newPackage = { 
       ...data, 
@@ -308,120 +287,107 @@ export function AppProvider({ children }) {
       createdAt: now,
       updatedAt: now,
     }
+    // Update UI immediately
+    setPackages(prev => [...prev, newPackage])
+    // Save to database
     try {
       await db.upsertPackage(newPackage)
-      setPackages(prev => [...prev, newPackage])
+      console.log('Package saved successfully')
     } catch (err) {
       console.error('Error adding package:', err)
     }
   }, [])
 
   const updatePackage = useCallback(async (id, data) => {
+    console.log('Updating package:', id, data)
+    const pkg = packages.find(p => p.id === id)
+    if (!pkg) return
+    const updated = { ...pkg, ...data, updatedAt: new Date().toISOString() }
+    setPackages(prev => prev.map(p => p.id === id ? updated : p))
     try {
-      const pkg = packages.find(p => p.id === id)
-      if (!pkg) return
-      const updated = { ...pkg, ...data, updatedAt: new Date().toISOString() }
       await db.upsertPackage(updated)
-      setPackages(prev => prev.map(p => p.id === id ? updated : p))
     } catch (err) {
       console.error('Error updating package:', err)
     }
   }, [packages])
 
   const deletePackage = useCallback(async (id) => {
+    console.log('Deleting package:', id)
+    // Update UI immediately
+    setPackages(prev => prev.filter(p => p.id !== id))
+    // Delete from database
     try {
       await db.deletePackage(id)
-      setPackages(prev => prev.filter(p => p.id !== id))
+      console.log('Package deleted successfully')
     } catch (err) {
       console.error('Error deleting package:', err)
     }
   }, [])
 
-  // Package service actions
+  // Package service actions - FIXED
   const addServiceToPackage = useCallback(async (packageId, serviceData) => {
-    const pkg = packages.find(p => p.id === packageId)
-    if (!pkg) return
-
-    const services = pkg.services || []
-    const maxSortOrder = services.length > 0 ? Math.max(...services.map(s => s.sortOrder || 0)) : 0
-    const newService = {
-      id: Date.now().toString(),
-      name: serviceData.name,
-      description: serviceData.description || undefined,
-      quantity: serviceData.quantity || 1,
-      sortOrder: serviceData.sortOrder ?? (maxSortOrder + 1),
-    }
-    const updated = {
-      ...pkg,
-      services: [...services, newService],
-      updatedAt: new Date().toISOString(),
-    }
-
-    try {
-      await db.upsertPackage(updated)
-      setPackages(prev => prev.map(p => p.id === packageId ? updated : p))
-    } catch (err) {
-      console.error('Error adding service to package:', err)
-    }
-  }, [packages])
+    console.log('Adding service to package:', packageId, serviceData)
+    setPackages(prev => prev.map(p => {
+      if (p.id !== packageId) return p
+      const services = p.services || []
+      const maxSortOrder = services.length > 0 ? Math.max(...services.map(s => s.sortOrder || 0)) : 0
+      const newService = {
+        id: Date.now().toString(),
+        name: serviceData.name,
+        description: serviceData.description || '',
+        quantity: serviceData.quantity || 1,
+        sortOrder: maxSortOrder + 1,
+      }
+      const updated = {
+        ...p,
+        services: [...services, newService],
+        updatedAt: new Date().toISOString(),
+      }
+      // Save to DB asynchronously
+      db.upsertPackage(updated).catch(err => console.error('Error:', err))
+      return updated
+    }))
+  }, [])
 
   const removeServiceFromPackage = useCallback(async (packageId, serviceId) => {
-    const pkg = packages.find(p => p.id === packageId)
-    if (!pkg) return
-
-    const filteredServices = (pkg.services || []).filter(s => s.id !== serviceId)
-    const updated = {
-      ...pkg,
-      services: filteredServices,
-      updatedAt: new Date().toISOString(),
-    }
-
-    try {
-      await db.upsertPackage(updated)
-      setPackages(prev => prev.map(p => p.id === packageId ? updated : p))
-    } catch (err) {
-      console.error('Error removing service from package:', err)
-    }
-  }, [packages])
+    console.log('Removing service from package:', packageId, serviceId)
+    setPackages(prev => prev.map(p => {
+      if (p.id !== packageId) return p
+      const services = (p.services || []).filter(s => s.id !== serviceId)
+      const updated = { ...p, services, updatedAt: new Date().toISOString() }
+      db.upsertPackage(updated).catch(err => console.error('Error:', err))
+      return updated
+    }))
+  }, [])
 
   const updatePackageService = useCallback(async (packageId, serviceId, data) => {
-    const pkg = packages.find(p => p.id === packageId)
-    if (!pkg) return
-
-    const updatedServices = (pkg.services || []).map(s => s.id === serviceId ? { ...s, ...data } : s)
-    const updated = { ...pkg, services: updatedServices, updatedAt: new Date().toISOString() }
-
-    try {
-      await db.upsertPackage(updated)
-      setPackages(prev => prev.map(p => p.id === packageId ? updated : p))
-    } catch (err) {
-      console.error('Error updating package service:', err)
-    }
-  }, [packages])
+    setPackages(prev => prev.map(p => {
+      if (p.id !== packageId) return p
+      const services = (p.services || []).map(s => s.id === serviceId ? { ...s, ...data } : s)
+      const updated = { ...p, services, updatedAt: new Date().toISOString() }
+      db.upsertPackage(updated).catch(err => console.error('Error:', err))
+      return updated
+    }))
+  }, [])
 
   const reorderPackageServices = useCallback(async (packageId, serviceIds) => {
-    const pkg = packages.find(p => p.id === packageId)
-    if (!pkg) return
-
-    const servicesMap = new Map((pkg.services || []).map(s => [s.id, s]))
-    const reorderedServices = serviceIds
-      .filter(id => servicesMap.has(id))
-      .map((id, idx) => ({ ...servicesMap.get(id), sortOrder: idx + 1 }))
-    const updated = { ...pkg, services: reorderedServices, updatedAt: new Date().toISOString() }
-
-    try {
-      await db.upsertPackage(updated)
-      setPackages(prev => prev.map(p => p.id === packageId ? updated : p))
-    } catch (err) {
-      console.error('Error reordering package services:', err)
-    }
-  }, [packages])
+    setPackages(prev => prev.map(p => {
+      if (p.id !== packageId) return p
+      const servicesMap = new Map((p.services || []).map(s => [s.id, s]))
+      const reorderedServices = serviceIds
+        .filter(id => servicesMap.has(id))
+        .map((id, idx) => ({ ...servicesMap.get(id), sortOrder: idx + 1 }))
+      const updated = { ...p, services: reorderedServices, updatedAt: new Date().toISOString() }
+      db.upsertPackage(updated).catch(err => console.error('Error:', err))
+      return updated
+    }))
+  }, [])
 
   // Studio
   const setStudio = useCallback(async (data) => {
+    setStudioState(data)
     try {
       await db.saveStudio(data)
-      setStudioState(data)
     } catch (err) {
       console.error('Error saving studio:', err)
     }
@@ -480,10 +446,11 @@ export function AppProvider({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-pink-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div>
-          <p className="mt-4 text-pink-600">Loading...</p>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fdf2f8' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: '48px', height: '48px', border: '4px solid #fce7f3', borderTop: '4px solid #be185d', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }}></div>
+          <p style={{ marginTop: '16px', color: '#be185d' }}>Loading...</p>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
     )
@@ -491,7 +458,7 @@ export function AppProvider({ children }) {
 
   return (
     <AppContext.Provider value={{
-      invoices, customers, services, packages, studio, loading, error,
+      invoices, customers, services, packages, studio, loading,
       addInvoice, updateInvoice, deleteInvoice, addPayment,
       upsertCustomer, updateCustomer, deleteCustomer,
       addService, updateService, deleteService,
