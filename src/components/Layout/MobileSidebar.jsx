@@ -2,7 +2,24 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
-export default function MobileSidebar() {
+// Hook to detect mobile viewport
+export function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < breakpoint)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [breakpoint])
+
+  return isMobile
+}
+
+export function MobileSidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const location = useLocation()
   const { logout } = useAuth()
@@ -146,6 +163,8 @@ export default function MobileSidebar() {
     </>
   )
 }
+
+export default MobileSidebar
 
 const styles = {
   mobileHeader: {
