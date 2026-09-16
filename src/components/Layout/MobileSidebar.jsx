@@ -1,250 +1,331 @@
-﻿import React, { useState, useEffect, useCallback } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+﻿import React, { useState, useEffect } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
-const MOBILE_BREAKPOINT = 768
-
-const NAV_LINKS = [
-  { to: '/', label: 'Dashboard', icon: '🏠' },
-  { to: '/invoices/new', label: 'New Invoice', icon: '📝' },
-  { to: '/customers', label: 'Customer Info', icon: '👥' },
-  { to: '/invoices', label: 'Invoices', icon: '🧾' },
-  { to: '/services', label: 'Services', icon: '📋' },
-  { to: '/reports', label: 'Reports', icon: '📊' },
-]
-
-const SETTINGS_SUB_ITEMS = [
-  { to: '/settings/profile', label: 'Profile', adminOnly: false },
-  { to: '/settings/admin-password', label: 'Admin Password', adminOnly: true },
-  { to: '/settings/users', label: 'User Management', adminOnly: true },
-]
-
-export function MobileSidebar() {
+export default function MobileSidebar() {
   const [isOpen, setIsOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
-  const [settingsExpanded, setSettingsExpanded] = useState(false)
   const location = useLocation()
-  const navigate = useNavigate()
-  const { isAdmin, user, logout } = useAuth()
+  const { logout } = useAuth()
 
-  const checkMobile = useCallback(() => {
-    setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT)
-  }, [])
-
-  useEffect(() => {
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [checkMobile])
+  const links = [
+    { to: '/', label: 'Dashboard', icon: '🏠' },
+    { to: '/invoices/new', label: 'New Invoice', icon: '➕' },
+    { to: '/invoices', label: 'Invoices', icon: '🧾' },
+    { to: '/customers', label: 'Customer Info', icon: '👥' },
+    { to: '/services', label: 'Services', icon: '📋' },
+    { to: '/reports', label: 'Reports', icon: '📊' },
+    { to: '/settings', label: 'Settings', icon: '⚙️' },
+  ]
 
   useEffect(() => {
     setIsOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
-    if (location.pathname.startsWith('/settings')) {
-      setSettingsExpanded(true)
-    }
-  }, [location.pathname])
-
-  useEffect(() => {
     const handleEscape = (e) => {
-      if (e.key === 'Escape' && isOpen) setIsOpen(false)
+      if (e.key === 'Escape') {
+        setIsOpen(false)
+      }
     }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = ''
+    }
   }, [isOpen])
 
-  useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
-  }, [isOpen])
-
-  if (!isMobile) return null
-
-  const toggleDrawer = () => setIsOpen(!isOpen)
-  const closeDrawer = () => setIsOpen(false)
-  const toggleSettings = () => setSettingsExpanded(!settingsExpanded)
-
-  const handleLogout = () => {
-    closeDrawer()
-    logout()
-    navigate('/login')
-  }
-
-  const isLinkActive = (linkTo) => {
-    if (linkTo === '/') return location.pathname === '/'
-    if (linkTo === '/invoices/new') return location.pathname === '/invoices/new'
-    if (linkTo === '/invoices') {
+  const isLinkActive = (link) => {
+    if (link.to === '/') {
+      return location.pathname === '/'
+    } else if (link.to === '/invoices/new') {
+      return location.pathname === '/invoices/new'
+    } else if (link.to === '/invoices') {
       return location.pathname === '/invoices' || 
-             (location.pathname.startsWith('/invoices/') && !location.pathname.includes('/new'))
+        (location.pathname.startsWith('/invoices/') && location.pathname !== '/invoices/new')
+    } else {
+      return location.pathname.startsWith(link.to)
     }
-    return location.pathname.startsWith(linkTo)
   }
-
-  const isSettingsActive = () => location.pathname.startsWith('/settings')
 
   return (
     <>
-      <button onClick={toggleDrawer} style={styles.hamburgerButton} aria-label="Menu">
-        <span style={styles.hamburgerIcon}>{isOpen ? '✕' : '☰'}</span>
-      </button>
+      {/* Mobile Header Bar */}
+      <div style={styles.mobileHeader}>
+        <button
+          onClick={() => setIsOpen(true)}
+          style={styles.hamburgerButton}
+          aria-label="Open navigation menu"
+        >
+          <span style={styles.hamburgerLine}></span>
+          <span style={styles.hamburgerLine}></span>
+          <span style={styles.hamburgerLine}></span>
+        </button>
+        
+        <div style={styles.mobileLogo}>
+          <img src="/logo.png" alt="CandyCapture Logo" style={styles.mobileLogoImage} />
+          <span style={styles.mobileLogoText}>Candy Capture</span>
+        </div>
+        
+        <div style={{ width: '40px' }}></div>
+      </div>
 
-      {isOpen && <div style={styles.overlay} onClick={closeDrawer} />}
+      {/* Overlay */}
+      {isOpen && (
+        <div
+          style={styles.overlay}
+          onClick={() => setIsOpen(false)}
+        />
+      )}
 
-      <aside style={{ ...styles.drawer, transform: isOpen ? 'translateX(0)' : 'translateX(-100%)' }}>
+      {/* Drawer */}
+      <aside
+        style={{
+          ...styles.drawer,
+          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+        }}
+      >
+        {/* Drawer Header */}
         <div style={styles.drawerHeader}>
-          <div style={styles.logo}>
-            <div style={styles.logoIcon}>📸</div>
+          <div style={styles.drawerLogo}>
+            <img src="/logo.png" alt="CandyCapture Logo" style={styles.drawerLogoImage} />
             <div>
-              <div style={styles.logoTitle}>CandyCapture</div>
-              <div style={styles.logoSub}>Photography</div>
+              <div style={styles.drawerLogoTitle}>Candy Capture</div>
+              <div style={styles.drawerLogoSub}>Photography</div>
             </div>
           </div>
-          <button onClick={closeDrawer} style={styles.closeButton}>✕</button>
+          <button
+            onClick={() => setIsOpen(false)}
+            style={styles.closeButton}
+            aria-label="Close navigation menu"
+          >
+            ✕
+          </button>
         </div>
 
+        {/* Navigation Links */}
         <nav style={styles.nav}>
-          {NAV_LINKS.map((link) => (
-            <NavLink key={link.to} to={link.to} style={{ textDecoration: 'none' }} onClick={closeDrawer}>
-              <div style={{ ...styles.navItem, ...(isLinkActive(link.to) ? styles.navItemActive : {}) }}>
-                <span style={styles.navIcon}>{link.icon}</span>
-                <span style={styles.navLabel}>{link.label}</span>
-              </div>
-            </NavLink>
-          ))}
-
-          <div>
-            <div onClick={toggleSettings} style={{ ...styles.navItem, ...(isSettingsActive() ? styles.navItemActive : {}), cursor: 'pointer' }}>
-              <span style={styles.navIcon}>⚙️</span>
-              <span style={styles.navLabel}>Settings</span>
-              <span style={{ ...styles.expandIcon, transform: settingsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-            </div>
-
-            {settingsExpanded && (
-              <div style={styles.subMenu}>
-                {SETTINGS_SUB_ITEMS.map(item => {
-                  if (item.adminOnly && !isAdmin) return null
-                  const isActive = location.pathname === item.to
-                  return (
-                    <NavLink key={item.to} to={item.to} style={{ textDecoration: 'none' }} onClick={closeDrawer}>
-                      <div style={{ ...styles.subMenuItem, ...(isActive ? styles.subMenuItemActive : {}) }}>
-                        <span style={styles.subMenuBullet}>•</span>
-                        <span style={styles.subMenuLabel}>{item.label}</span>
-                      </div>
-                    </NavLink>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          {links.map(link => {
+            const isActive = isLinkActive(link)
+            return (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                style={{ textDecoration: 'none' }}
+                onClick={() => setIsOpen(false)}
+              >
+                <div style={{ 
+                  ...styles.navItem, 
+                  ...(isActive ? styles.navItemActive : {}) 
+                }}>
+                  <span style={styles.navIcon}>{link.icon}</span>
+                  <span style={styles.navLabel}>{link.label}</span>
+                </div>
+              </NavLink>
+            )
+          })}
         </nav>
 
-        <div style={styles.drawerFooter}>
-          {user && (
-            <div style={styles.userInfo}>
-              <span style={styles.userIcon}>👤</span>
-              <div style={styles.userDetails}>
-                <div style={styles.userName}>{user.username}</div>
-                <div style={styles.userRole}>{user.role === 'Admin' ? 'Administrator' : 'Staff'}</div>
-              </div>
-            </div>
-          )}
-          
-          {/* LOGOUT BUTTON - Fixed for mobile */}
-          <button onClick={handleLogout} style={styles.logoutButton}>
-            <span>🚪</span>
+        {/* Logout Button */}
+        <div style={styles.logoutSection}>
+          <button onClick={logout} style={styles.logoutButton}>
+            <span style={styles.logoutIcon}>🚪</span>
             <span>Logout</span>
           </button>
-          
-          <div style={styles.footerText}>© 2024 CandyCapture Photography</div>
+        </div>
+
+        {/* Footer */}
+        <div style={styles.drawerFooter}>
+          <div style={styles.footerText}>
+            © 2024 Candy Capture Photography
+          </div>
         </div>
       </aside>
     </>
   )
 }
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
-  return isMobile
-}
-
 const styles = {
-  hamburgerButton: {
-    position: 'fixed', top: '12px', left: '12px', zIndex: 1001,
-    width: '44px', height: '44px', border: 'none', borderRadius: '10px',
-    background: 'linear-gradient(135deg, #831843 0%, #be185d 100%)',
-    color: '#ffffff', cursor: 'pointer', display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 2px 12px rgba(131, 24, 67, 0.3)',
+  mobileHeader: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '56px',
+    background: 'linear-gradient(135deg, #831843 0%, #9d174d 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 12px',
+    zIndex: 100,
+    boxShadow: '0 2px 8px rgba(131,24,67,0.3)',
   },
-  hamburgerIcon: { fontSize: '1.25rem', lineHeight: 1 },
+  hamburgerButton: {
+    width: '40px',
+    height: '40px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '5px',
+    background: 'rgba(255,255,255,0.1)',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    padding: '8px',
+  },
+  hamburgerLine: {
+    width: '20px',
+    height: '2px',
+    background: '#ffffff',
+    borderRadius: '1px',
+    display: 'block',
+  },
+  mobileLogo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  mobileLogoImage: {
+    width: '32px',
+    height: '32px',
+    objectFit: 'contain',
+    borderRadius: '6px',
+  },
+  mobileLogoText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: '1rem',
+  },
   overlay: {
-    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-    background: 'rgba(0, 0, 0, 0.5)', zIndex: 999,
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0,0,0,0.5)',
+    zIndex: 200,
   },
   drawer: {
-    position: 'fixed', top: 0, left: 0, bottom: 0, width: '280px', maxWidth: '85vw',
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: '280px',
+    maxWidth: '85vw',
     background: 'linear-gradient(180deg, #831843 0%, #9d174d 40%, #be185d 100%)',
-    zIndex: 1000, display: 'flex', flexDirection: 'column',
-    boxShadow: '4px 0 24px rgba(131, 24, 67, 0.4)', transition: 'transform 0.3s ease',
+    zIndex: 300,
+    display: 'flex',
+    flexDirection: 'column',
+    transition: 'transform 0.3s ease-out',
+    boxShadow: '4px 0 20px rgba(131,24,67,0.3)',
   },
   drawerHeader: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '16px 16px 12px', borderBottom: '1px solid rgba(249, 168, 212, 0.2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '16px',
+    borderBottom: '1px solid rgba(249,168,212,0.2)',
   },
-  logo: { display: 'flex', alignItems: 'center', gap: '10px' },
-  logoIcon: { fontSize: '1.75rem', background: 'rgba(255, 255, 255, 0.15)', borderRadius: '10px', padding: '6px 8px' },
-  logoTitle: { color: '#ffffff', fontWeight: '700', fontSize: '1rem', lineHeight: '1.2' },
-  logoSub: { color: '#f9a8d4', fontSize: '0.75rem', fontWeight: '400' },
+  drawerLogo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  drawerLogoImage: {
+    width: '48px',
+    height: '48px',
+    objectFit: 'contain',
+    borderRadius: '10px',
+  },
+  drawerLogoTitle: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: '0.95rem',
+    lineHeight: '1.2',
+  },
+  drawerLogoSub: {
+    color: '#f9a8d4',
+    fontSize: '0.75rem',
+    fontWeight: '400',
+  },
   closeButton: {
-    width: '36px', height: '36px', border: 'none', borderRadius: '8px',
-    background: 'rgba(255, 255, 255, 0.1)', color: '#ffffff', fontSize: '1rem', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(255,255,255,0.1)',
+    border: 'none',
+    borderRadius: '8px',
+    color: '#ffffff',
+    fontSize: '1.2rem',
+    cursor: 'pointer',
   },
-  nav: { flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto' },
+  nav: {
+    flex: 1,
+    padding: '16px 12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    overflowY: 'auto',
+  },
   navItem: {
-    display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px',
-    borderRadius: '10px', cursor: 'pointer', transition: 'all 0.15s ease', color: '#fce7f3',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    padding: '14px 16px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    color: '#fce7f3',
   },
   navItemActive: {
-    background: 'rgba(255, 255, 255, 0.2)', color: '#ffffff', fontWeight: '600',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+    background: 'rgba(255,255,255,0.2)',
+    color: '#ffffff',
+    fontWeight: '600',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
   },
-  navIcon: { fontSize: '1.25rem', width: '24px', textAlign: 'center' },
-  navLabel: { fontSize: '0.95rem', flex: 1 },
-  expandIcon: { fontSize: '0.6rem', marginLeft: 'auto', transition: 'transform 0.2s ease', color: '#f9a8d4' },
-  subMenu: { marginTop: '2px', paddingLeft: '8px', display: 'flex', flexDirection: 'column', gap: '2px' },
-  subMenuItem: {
-    display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px 12px 28px',
-    borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s', color: '#fce7f3',
+  navIcon: {
+    fontSize: '1.25rem',
+    width: '28px',
+    textAlign: 'center',
   },
-  subMenuItemActive: { background: 'rgba(255,255,255,0.15)', color: '#ffffff', fontWeight: '500' },
-  subMenuBullet: { fontSize: '0.8rem', color: '#f9a8d4' },
-  subMenuLabel: { fontSize: '0.875rem' },
-  drawerFooter: { padding: '16px', borderTop: '1px solid rgba(249, 168, 212, 0.2)' },
-  userInfo: {
-    display: 'flex', alignItems: 'center', gap: '10px', padding: '8px',
-    borderRadius: '8px', background: 'rgba(255,255,255,0.1)', marginBottom: '12px',
+  navLabel: {
+    fontSize: '1rem',
+    fontWeight: '500',
   },
-  userIcon: { fontSize: '1.2rem', background: 'rgba(255,255,255,0.15)', borderRadius: '50%', padding: '6px' },
-  userDetails: { flex: 1 },
-  userName: { color: '#ffffff', fontWeight: '600', fontSize: '0.8rem', lineHeight: '1.2' },
-  userRole: { color: '#f9a8d4', fontSize: '0.7rem' },
+  logoutSection: {
+    padding: '8px 12px',
+  },
   logoutButton: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-    width: '100%', padding: '12px 16px', borderRadius: '10px', border: 'none',
-    background: 'rgba(239, 68, 68, 0.2)', color: '#fecaca',
-    fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', marginBottom: '12px',
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    padding: '14px 16px',
+    borderRadius: '10px',
+    border: 'none',
+    background: 'rgba(255,255,255,0.1)',
+    color: '#fce7f3',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    fontWeight: '500',
   },
-  footerText: { fontSize: '0.7rem', color: '#f9a8d4', textAlign: 'center' },
+  logoutIcon: {
+    fontSize: '1.25rem',
+    width: '28px',
+    textAlign: 'center',
+  },
+  drawerFooter: {
+    padding: '16px',
+    borderTop: '1px solid rgba(249,168,212,0.2)',
+  },
+  footerText: {
+    fontSize: '0.7rem',
+    color: '#f9a8d4',
+    textAlign: 'center',
+  },
 }
-
-export default MobileSidebar
-
