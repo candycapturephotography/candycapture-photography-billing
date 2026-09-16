@@ -25,15 +25,21 @@ function Layout({ children }) {
   
   return (
     <div style={styles.layout}>
-      {!isMobile && <Sidebar />}
-      <MobileSidebar />
-      <main style={{
-        ...styles.main,
-        marginLeft: isMobile ? 0 : '240px',
-        paddingTop: isMobile ? '68px' : 0,
-      }}>
-        {children}
-      </main>
+      {isMobile ? (
+        <>
+          <MobileSidebar />
+          <main style={{ ...styles.main, marginLeft: 0, paddingTop: '68px' }}>
+            {children}
+          </main>
+        </>
+      ) : (
+        <>
+          <Sidebar />
+          <main style={styles.main}>
+            {children}
+          </main>
+        </>
+      )}
     </div>
   )
 }
@@ -88,7 +94,6 @@ export default function App() {
                 <ProtectedLayout><Services /></ProtectedLayout>
               } />
               
-              {/* Reports - Monthly Billing Summary */}
               <Route path="/reports" element={
                 <ProtectedLayout><Reports /></ProtectedLayout>
               } />
