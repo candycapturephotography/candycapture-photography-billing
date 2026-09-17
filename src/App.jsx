@@ -28,14 +28,14 @@ function Layout({ children }) {
       {isMobile ? (
         <>
           <MobileSidebar />
-          <main style={{ ...styles.main, marginLeft: 0, paddingTop: '68px' }}>
+          <main style={{ ...styles.main, ...styles.mainWithWatermark, marginLeft: 0, paddingTop: '68px' }}>
             {children}
           </main>
         </>
       ) : (
         <>
           <Sidebar />
-          <main style={styles.main}>
+          <main style={{ ...styles.main, ...styles.mainWithWatermark }}>
             {children}
           </main>
         </>
@@ -124,5 +124,19 @@ export default function App() {
 
 const styles = {
   layout: { display: 'flex', minHeight: '100vh' },
-  main: { flex: 1, marginLeft: '240px', minHeight: '100vh', background: '#fdf2f8', overflowX: 'hidden' },
+  main: { 
+    flex: 1, 
+    marginLeft: '240px', 
+    minHeight: '100vh', 
+    background: '#fdf2f8', 
+    overflowX: 'hidden' 
+  },
+  mainWithWatermark: {
+    backgroundImage: 'url("/logo.png")',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'center center',
+    backgroundSize: '300px 300px',
+    backgroundBlendMode: 'soft-light',
+    backgroundColor: '#fdf2f8',
+  },
 }

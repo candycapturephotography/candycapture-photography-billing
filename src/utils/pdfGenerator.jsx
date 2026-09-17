@@ -93,9 +93,21 @@ export async function generatePDF(inv, studio) {
     const H = 297
     const M = 20
 
-    // Main white background
+        // Main white background
     doc.setFillColor(WHITE[0], WHITE[1], WHITE[2])
     doc.rect(0, 0, W, H, 'F')
+    
+    // WATERMARK - Faded logo in center background
+    if (safeStudio.logo) {
+      try {
+        doc.saveGraphicsState()
+        doc.setGState(new doc.GState({ opacity: 0.08 }))
+        doc.addImage(safeStudio.logo, 'PNG', W/2 - 50, H/2 - 50, 100, 100)
+        doc.restoreGraphicsState()
+      } catch (e) {
+        console.log('Watermark failed:', e)
+      }
+    }
     
     // Top decorative band
     doc.setFillColor(PINK_LIGHT[0], PINK_LIGHT[1], PINK_LIGHT[2])
@@ -439,3 +451,4 @@ export async function generatePDF(inv, studio) {
     return false
   }
 }
+
