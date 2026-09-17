@@ -1,7 +1,7 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://cyvvjbqymewaaamulgrqo.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZqYnF5bWV3YWFtdWdscnFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMjM4MjIsImV4cCI6MjEwNDg5OTgyMn0.MCjlFLw1kMUQOuMkZzeIo22Cjd4-LidsNYxkWT6hDxk'
+const supabaseUrl = 'https://cyvvjbqymewaamuglrqo.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5dnZqYnF5bWV3YWFtdWdscnFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMjM4MjIsImV4cCI6MjEwNDg5OTgyMn0.MCjlFLw1kMUQOuMkZzeIo22Cjd4-LidsNYxkWT6hDxk'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -114,7 +114,7 @@ export const db = {
   // Studio
   async getStudio() {
     const { data, error } = await supabase.from('studio').select('*').eq('id', 'main').single()
-    if (error && error.code !== 'PGRST116') throw error // PGRST116 = not found
+    if (error && error.code !== 'PGRST116') throw error
     return data ? toCamelCase(data) : null
   },
   
@@ -123,17 +123,4 @@ export const db = {
     if (error) throw error
     return toCamelCase(data?.[0])
   },
-
-  // Invoice counter
-  async getNextInvoiceNumber() {
-    const { data, error } = await supabase.rpc('increment_invoice_counter')
-    if (error) {
-      // Fallback if RPC doesn't exist
-      const { data: counter } = await supabase.from('invoice_counter').select('current_number').eq('id', 'counter').single()
-      const nextNum = (counter?.current_number || 0) + 1
-      await supabase.from('invoice_counter').update({ current_number: nextNum }).eq('id', 'counter')
-      return `INV-${String(nextNum).padStart(4, '0')}`
-    }
-    return `INV-${String(data).padStart(4, '0')}`
-  }
 }
