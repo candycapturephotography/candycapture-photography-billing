@@ -3,7 +3,7 @@
  * Sends messages via Cloudflare Worker backend
  */
 
-const WHATSAPP_API_URL = import.meta.env.VITE_WHATSAPP_API_URL || 'https://candycapture-whatsapp-api.your-subdomain.workers.dev';
+const WHATSAPP_API_URL = import.meta.env.VITE_WHATSAPP_API_URL || 'https://candycapture-whatsapp-api.hellocandycapturephotography.workers.dev';
 
 /**
  * Send invoice via WhatsApp
@@ -62,7 +62,7 @@ export async function sendWhatsAppMessage(phone, message) {
  * Check if WhatsApp API is configured
  */
 export function isWhatsAppConfigured() {
-  return !!import.meta.env.VITE_WHATSAPP_API_URL;
+  return true;
 }
 
 export default {
