@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react'
+﻿import React, { useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext.jsx'
 import { generatePDF } from '../utils/pdfGenerator.jsx'
+import { sendInvoiceWhatsApp } from '../lib/whatsapp.js'
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
 
@@ -28,9 +29,13 @@ export const StatusBadge = ({ status, large }) => {
 
 // ── WhatsApp Share Modal ───────────────────────────────────────────────────
 function WhatsAppModal({ inv, studio, onClose }) {
-  const [step, setStep]         = useState(1) // 1=ready, 2=done pdf
-  const [pdfDone, setPdfDone]   = useState(false)
-  const [downloading, setDown]  = useState(false)
+  const [mode, setMode]           = useState('choose') // choose, api, manual
+  const [sending, setSending]     = useState(false)
+  const [result, setResult]       = useState(null)
+  const [msgType, setMsgType]     = useState('invoice') // invoice, reminder, confirmation
+  const [step, setStep]           = useState(1)
+  const [pdfDone, setPdfDone]     = useState(false)
+  const [downloading, setDown]    = useState(false)
 
   const balance = Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0)
   const eventDateStr = inv.eventDate
@@ -61,6 +66,20 @@ function WhatsAppModal({ inv, studio, onClose }) {
     studio.instagram || '',
   ].filter(l => l !== null).join('\n')
 
+  // Send via WhatsApp Business API
+  const handleSendAPI = async () => {
+    setSending(true)
+    setResult(null)
+    try {
+      const res = await sendInvoiceWhatsApp(inv, studio, msgType)
+      setResult(res)
+    } catch (err) {
+      setResult({ success: false, error: err.message })
+    }
+    setSending(false)
+  }
+
+  // Manual flow - download PDF
   const handleDownloadPDF = async () => {
     setDown(true)
     await generatePDF(inv, studio)
@@ -69,6 +88,7 @@ function WhatsAppModal({ inv, studio, onClose }) {
     setStep(2)
   }
 
+  // Manual flow - open WhatsApp
   const handleOpenWhatsApp = () => {
     const mobile = (inv.customerMobile || '').replace(/\D/g, '')
     const num    = mobile.startsWith('91') ? mobile : `91${mobile}`
@@ -76,20 +96,163 @@ function WhatsAppModal({ inv, studio, onClose }) {
     onClose()
   }
 
+  // Choose mode screen
+  if (mode === 'choose') {
+    return (
+      <div style={m.overlay} onClick={onClose}>
+        <div style={m.modal} onClick={e => e.stopPropagation()}>
+          <div style={m.header}>
+            <div style={m.headerIcon}>💬</div>
+            <div>
+              <div style={m.headerTitle}>Send via WhatsApp</div>
+              <div style={m.headerSub}>{inv.customerName} • {inv.customerMobile}</div>
+            </div>
+            <button style={m.closeBtn} onClick={onClose}>✕</button>
+          </div>
+
+          <div style={{ padding: '20px 22px' }}>
+            <div style={m.chooseTitle}>Choose how to send:</div>
+            
+            {/* API Option */}
+            <button style={m.chooseBtn} onClick={() => setMode('api')}>
+              <div style={m.chooseBtnIcon}>🚀</div>
+              <div>
+                <div style={m.chooseBtnTitle}>Send Instantly (API)</div>
+                <div style={m.chooseBtnDesc}>
+                  Message delivered directly to customer's WhatsApp. No manual steps!
+                </div>
+              </div>
+              <div style={m.chooseBtnArrow}>→</div>
+            </button>
+
+            {/* Manual Option */}
+            <button style={{ ...m.chooseBtn, marginTop: '12px' }} onClick={() => setMode('manual')}>
+              <div style={m.chooseBtnIcon}>📱</div>
+              <div>
+                <div style={m.chooseBtnTitle}>Open WhatsApp App</div>
+                <div style={m.chooseBtnDesc}>
+                  Download PDF, then share manually via WhatsApp on your phone
+                </div>
+              </div>
+              <div style={m.chooseBtnArrow}>→</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // API Mode
+  if (mode === 'api') {
+    return (
+      <div style={m.overlay} onClick={onClose}>
+        <div style={m.modal} onClick={e => e.stopPropagation()}>
+          <div style={m.header}>
+            <button style={m.backBtnSmall} onClick={() => { setMode('choose'); setResult(null); }}>←</button>
+            <div>
+              <div style={m.headerTitle}>🚀 Send Instantly</div>
+              <div style={m.headerSub}>{inv.customerName} • {inv.customerMobile}</div>
+            </div>
+            <button style={m.closeBtn} onClick={onClose}>✕</button>
+          </div>
+
+          <div style={{ padding: '20px 22px' }}>
+            {/* Message Type Selection */}
+            <div style={m.fieldLabel}>Message Type</div>
+            <div style={m.msgTypeRow}>
+              <button 
+                style={{ ...m.msgTypeBtn, ...(msgType === 'invoice' ? m.msgTypeBtnActive : {}) }}
+                onClick={() => setMsgType('invoice')}
+              >
+                📄 Invoice
+              </button>
+              <button 
+                style={{ ...m.msgTypeBtn, ...(msgType === 'confirmation' ? m.msgTypeBtnActive : {}) }}
+                onClick={() => setMsgType('confirmation')}
+              >
+                ✅ Booking
+              </button>
+              <button 
+                style={{ ...m.msgTypeBtn, ...(msgType === 'reminder' ? m.msgTypeBtnActive : {}) }}
+                onClick={() => setMsgType('reminder')}
+              >
+                🔔 Reminder
+              </button>
+            </div>
+
+            {/* Preview */}
+            <div style={m.previewBox}>
+              <div style={m.previewLabel}>Preview</div>
+              <div style={m.previewContent}>
+                {msgType === 'invoice' && (
+                  <>
+                    <div>📄 Invoice #{inv.invoiceNumber}</div>
+                    <div>💰 Total: {fmt(inv.totalAmount)}</div>
+                    <div>📌 Balance: {fmt(balance)}</div>
+                  </>
+                )}
+                {msgType === 'confirmation' && (
+                  <>
+                    <div>🎉 Booking Confirmed!</div>
+                    <div>📅 {eventDateStr}</div>
+                    <div>📦 {inv.packageName || 'Photography'}</div>
+                  </>
+                )}
+                {msgType === 'reminder' && (
+                  <>
+                    <div>🔔 Payment Reminder</div>
+                    <div>📌 Balance Due: {fmt(balance)}</div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Result */}
+            {result && (
+              <div style={{ 
+                ...m.resultBox, 
+                background: result.success ? '#dcfce7' : '#fee2e2',
+                color: result.success ? '#15803d' : '#b91c1c'
+              }}>
+                {result.success ? (
+                  <>✅ {result.message || 'Message sent successfully!'}</>
+                ) : (
+                  <>❌ {result.error || 'Failed to send message'}</>
+                )}
+              </div>
+            )}
+
+            {/* Send Button */}
+            <button 
+              style={{ ...m.sendBtn, opacity: sending ? 0.7 : 1 }}
+              onClick={handleSendAPI}
+              disabled={sending}
+            >
+              {sending ? '⏳ Sending...' : '📤 Send WhatsApp Message'}
+            </button>
+
+            <div style={m.apiNote}>
+              Message will be delivered directly to the customer's WhatsApp number.
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Manual Mode (existing flow)
   return (
     <div style={m.overlay} onClick={onClose}>
       <div style={m.modal} onClick={e => e.stopPropagation()}>
-        {/* Header */}
         <div style={m.header}>
-          <div style={m.headerIcon}>💬</div>
+          <button style={m.backBtnSmall} onClick={() => setMode('choose')}>←</button>
           <div>
-            <div style={m.headerTitle}>Send via WhatsApp</div>
+            <div style={m.headerTitle}>📱 Manual Share</div>
             <div style={m.headerSub}>{inv.customerName} • {inv.customerMobile}</div>
           </div>
           <button style={m.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        {/* Steps */}
         <div style={m.steps}>
           {/* Step 1 */}
           <div style={{ ...m.step, ...(step >= 1 ? m.stepActive : {}) }}>
@@ -111,7 +274,6 @@ function WhatsAppModal({ inv, studio, onClose }) {
             </div>
           </div>
 
-          {/* Connector */}
           <div style={m.connector} />
 
           {/* Step 2 */}
@@ -134,11 +296,9 @@ function WhatsAppModal({ inv, studio, onClose }) {
           </div>
         </div>
 
-        {/* Note */}
         <div style={m.note}>
           <span style={{ fontWeight: '600' }}>ℹ️ Why manual attach?</span> WhatsApp does not allow
           any app or website to attach files automatically — this is WhatsApp's own security policy.
-          All billing apps (Vyapar, Zoho, etc.) work the same way.
         </div>
       </div>
     </div>
@@ -153,6 +313,29 @@ const m = {
   headerTitle: { fontWeight: '700', fontSize: '1rem', color: '#831843' },
   headerSub:   { fontSize: '0.78rem', color: '#9d174d', marginTop: '2px' },
   closeBtn:    { marginLeft: 'auto', background: 'none', border: 'none', fontSize: '1.1rem', cursor: 'pointer', color: '#9ca3af', padding: '4px 8px' },
+  backBtnSmall: { background: '#fce7f3', border: 'none', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', color: '#be185d', fontWeight: '600' },
+  
+  // Choose mode
+  chooseTitle: { fontSize: '0.9rem', fontWeight: '600', color: '#374151', marginBottom: '16px' },
+  chooseBtn: { display: 'flex', alignItems: 'center', gap: '14px', width: '100%', padding: '16px', background: '#f9fafb', border: '2px solid #e5e7eb', borderRadius: '14px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' },
+  chooseBtnIcon: { fontSize: '1.8rem', flexShrink: 0 },
+  chooseBtnTitle: { fontWeight: '700', fontSize: '0.95rem', color: '#1f2937', marginBottom: '4px' },
+  chooseBtnDesc: { fontSize: '0.78rem', color: '#6b7280', lineHeight: '1.4' },
+  chooseBtnArrow: { marginLeft: 'auto', fontSize: '1.2rem', color: '#9ca3af' },
+  
+  // API mode
+  fieldLabel: { fontSize: '0.78rem', fontWeight: '600', color: '#6b7280', marginBottom: '8px' },
+  msgTypeRow: { display: 'flex', gap: '8px', marginBottom: '16px' },
+  msgTypeBtn: { flex: 1, padding: '10px 8px', background: '#f3f4f6', border: '2px solid transparent', borderRadius: '10px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600', color: '#6b7280', transition: 'all 0.15s' },
+  msgTypeBtnActive: { background: '#fdf2f8', borderColor: '#be185d', color: '#be185d' },
+  previewBox: { background: '#f9fafb', borderRadius: '12px', padding: '14px', marginBottom: '16px' },
+  previewLabel: { fontSize: '0.7rem', fontWeight: '600', color: '#9ca3af', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  previewContent: { fontSize: '0.85rem', color: '#374151', lineHeight: '1.7' },
+  resultBox: { padding: '12px 16px', borderRadius: '10px', marginBottom: '16px', fontSize: '0.85rem', fontWeight: '600' },
+  sendBtn: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #25D366, #128C7E)', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '0.95rem', fontWeight: '700', cursor: 'pointer' },
+  apiNote: { marginTop: '12px', fontSize: '0.75rem', color: '#9ca3af', textAlign: 'center' },
+  
+  // Manual mode
   steps:    { padding: '20px 22px' },
   step:     { display: 'flex', gap: '14px', alignItems: 'flex-start' },
   stepActive: {},
@@ -194,7 +377,6 @@ export default function InvoiceView() {
     setShowPayModal(false)
   }
 
-  // ── PDF download ──────────────────────────────────────────────────────────
   const handleDownloadPDF = async () => {
     setDownloading(true)
     await generatePDF(inv, studio)
@@ -232,7 +414,6 @@ export default function InvoiceView() {
         {/* Header */}
         <div style={s.invHeader}>
           <div style={s.invFrom}>
-            {/* Logo or camera emoji */}
             {studio.logo
               ? <img src={studio.logo} alt="logo" style={s.logoImg} />
               : <div style={s.invLogoEmoji}>📸</div>
@@ -269,7 +450,6 @@ export default function InvoiceView() {
           </div>
         </div>
 
-        {/* Pink gradient divider */}
         <div style={s.divider} />
 
         {/* Bill To + Event Details */}
@@ -467,7 +647,6 @@ const s = {
   signature: { fontSize: '1.2rem', fontWeight: '800', color: '#fff', fontStyle: 'italic' },
   sigLine:   { width: '150px', height: '2px', background: 'rgba(255,255,255,0.4)', marginTop: '4px' },
   sigName:   { fontSize: '0.7rem', color: '#fce7f3', letterSpacing: '1px' },
-  // Modal
   overlay:    { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 },
   modal:      { background: '#fff', borderRadius: '16px', padding: '28px', width: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' },
   modalTitle: { fontSize: '1.1rem', fontWeight: '700', color: '#831843', marginBottom: '16px' },

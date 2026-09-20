@@ -1,0 +1,9 @@
+﻿name = "candycapture-whatsapp-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+WHATSAPP_PHONE_NUMBER_ID = "1312422231960736"
+
+# The access token should be added as a secret, not here
+# Run: npx wrangler secret put WHATSAPP_ACCESS_TOKEN
