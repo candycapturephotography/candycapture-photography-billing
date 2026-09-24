@@ -1,7 +1,7 @@
 ﻿import { jsPDF } from 'jspdf'
 
 /**
- * Elegant Invoice PDF Generator - Fixed Alignment
+ * Elegant Invoice PDF Generator - Fixed Alignment & Unicode
  * Theme: Light pink and white with clean layout
  */
 
@@ -25,6 +25,31 @@ const formatDate = (dateStr) => {
   } catch {
     return String(dateStr)
   }
+}
+
+// Sanitize text for PDF (remove fancy unicode characters)
+const sanitizeText = (text) => {
+  if (!text) return ''
+  // Map fancy unicode to regular ASCII
+  const unicodeMap = {
+    '𝑨': 'A', '𝑩': 'B', '𝑪': 'C', '𝑫': 'D', '𝑬': 'E', '𝑭': 'F', '𝑮': 'G', '𝑯': 'H',
+    '𝑰': 'I', '𝑱': 'J', '𝑲': 'K', '𝑳': 'L', '𝑴': 'M', '𝑵': 'N', '𝑶': 'O', '𝑷': 'P',
+    '𝑸': 'Q', '𝑹': 'R', '𝑺': 'S', '𝑻': 'T', '𝑼': 'U', '𝑽': 'V', '𝑾': 'W', '𝑿': 'X',
+    '𝒀': 'Y', '𝒁': 'Z',
+    '𝒂': 'a', '𝒃': 'b', '𝒄': 'c', '𝒅': 'd', '𝒆': 'e', '𝒇': 'f', '𝒈': 'g', '𝒉': 'h',
+    '𝒊': 'i', '𝒋': 'j', '𝒌': 'k', '𝒍': 'l', '𝒎': 'm', '𝒏': 'n', '𝒐': 'o', '𝒑': 'p',
+    '𝒒': 'q', '𝒓': 'r', '𝒔': 's', '𝒕': 't', '𝒖': 'u', '𝒗': 'v', '𝒘': 'w', '𝒙': 'x',
+    '𝒚': 'y', '𝒛': 'z',
+    '✦': '*', '★': '*', '☆': '*', '✧': '*', '✩': '*', '✪': '*',
+    '❤': '', '💕': '', '📸': '', '📞': '', '✉': '', '📱': '', '🌐': '',
+  }
+  let result = String(text)
+  for (const [fancy, plain] of Object.entries(unicodeMap)) {
+    result = result.split(fancy).join(plain)
+  }
+  // Remove any remaining non-ASCII characters that jsPDF can't handle
+  result = result.replace(/[^\x00-\x7F]/g, '')
+  return result.trim()
 }
 
 // Color palette
@@ -57,30 +82,30 @@ export async function generatePDF(inv, studio) {
     }
 
     const safeInv = {
-      invoiceNumber: String(inv.invoiceNumber || 'INV-001'),
-      customerName: String(inv.customerName || 'Customer'),
-      customerMobile: String(inv.customerMobile || ''),
-      customerEmail: String(inv.customerEmail || ''),
-      eventType: String(inv.eventType || ''),
+      invoiceNumber: sanitizeText(inv.invoiceNumber || 'INV-001'),
+      customerName: sanitizeText(inv.customerName || 'Customer'),
+      customerMobile: sanitizeText(inv.customerMobile || ''),
+      customerEmail: sanitizeText(inv.customerEmail || ''),
+      eventType: sanitizeText(inv.eventType || ''),
       eventDate: inv.eventDate || '',
-      location: String(inv.location || inv.venue || ''),
-      packageName: String(inv.packageName || inv.snapshot?.packageName || ''),
-      packageDescription: String(inv.packageDescription || ''),
+      location: sanitizeText(inv.location || inv.venue || ''),
+      packageName: sanitizeText(inv.packageName || inv.snapshot?.packageName || ''),
+      packageDescription: sanitizeText(inv.packageDescription || ''),
       totalAmount: Number(inv.totalAmount) || 0,
       paidAmount: Number(inv.paidAmount) || 0,
       status: String(inv.status || 'advance'),
-      notes: String(inv.notes || ''),
+      notes: sanitizeText(inv.notes || ''),
       payments: Array.isArray(inv.payments) ? inv.payments : [],
       services: inv.snapshot?.lineItems || inv.lineItems || [],
     }
 
     const safeStudio = {
-      name: String(studio?.name || 'Candy Capture Photography'),
-      address: String(studio?.address || ''),
-      mobile: String(studio?.mobile || ''),
-      email: String(studio?.email || ''),
-      instagram: String(studio?.instagram || ''),
-      signature: String(studio?.signature || studio?.name || 'Candy Capture Photography'),
+      name: sanitizeText(studio?.name || 'Candy Capture Photography'),
+      address: sanitizeText(studio?.address || ''),
+      mobile: sanitizeText(studio?.mobile || ''),
+      email: sanitizeText(studio?.email || ''),
+      instagram: sanitizeText(studio?.instagram || ''),
+      signature: sanitizeText(studio?.signature || studio?.name || 'Candy Capture Photography'),
       logo: studio?.logo || null,
     }
 
@@ -130,7 +155,16 @@ export async function generatePDF(inv, studio) {
     doc.setFontSize(8)
     doc.setTextColor(...TEXT_MEDIUM)
     let contactY = y + 14
-    if (safeStudio.address) { doc.text(safeStudio.address, M + logoOffset, contactY); contactY += 4 }
+    if (safeStudio.address) {
+      // Handle multi-line address
+      const addressLines = safeStudio.address.split('\n')
+      addressLines.forEach(line => {
+        if (line.trim()) {
+          doc.text(line.trim(), M + logoOffset, contactY)
+          contactY += 4
+        }
+      })
+    }
     if (safeStudio.mobile) { doc.text('Ph: ' + safeStudio.mobile, M + logoOffset, contactY); contactY += 4 }
     if (safeStudio.email) { doc.text(safeStudio.email, M + logoOffset, contactY) }
 
@@ -157,13 +191,13 @@ export async function generatePDF(inv, studio) {
     doc.text(statusLabel, W - M - 14, y + 25, { align: 'center' })
 
     // Pink divider line
-    y = 45
+    y = 48
     doc.setDrawColor(...PINK_ACCENT)
     doc.setLineWidth(0.8)
     doc.line(M, y, W - M, y)
 
     // ===== BILL TO & EVENT DETAILS =====
-    y = 52
+    y = 55
     const colW = (W - M * 2 - 10) / 2  // Two columns with gap
 
     // Bill To box
@@ -217,7 +251,7 @@ export async function generatePDF(inv, studio) {
     }
 
     // ===== ITEMS TABLE =====
-    y = 92
+    y = 95
 
     // Table header
     doc.setFillColor(...PINK_MEDIUM)
@@ -258,7 +292,7 @@ export async function generatePDF(inv, studio) {
       doc.setTextColor(...TEXT_MEDIUM)
       
       safeInv.services.forEach((svc, i) => {
-        const svcName = svc.name || svc.description || 'Service'
+        const svcName = sanitizeText(svc.name || svc.description || 'Service')
         const qty = svc.quantity || 1
         doc.text(`${i + 1}. ${svcName}${qty > 1 ? ' (x' + qty + ')' : ''}`, M + 12, y)
         y += 5
@@ -349,7 +383,7 @@ export async function generatePDF(inv, studio) {
         doc.text(fmt(p.amount), M + 70, y + 5)
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...TEXT_LIGHT)
-        doc.text(String(p.note || '-').substring(0, 30), M + 110, y + 5)
+        doc.text(sanitizeText(p.note || '-').substring(0, 30), M + 110, y + 5)
         y += 7
       })
       y += 6
@@ -389,7 +423,8 @@ export async function generatePDF(inv, studio) {
     doc.setTextColor(...TEXT_DARK)
     doc.text('Thank you for choosing us!', W / 2, footerY + 10, { align: 'center' })
 
-    doc.setFont('helvetica', 'bold')
+    // Signature (use studio name if signature has special characters)
+    doc.setFont('helvetica', 'bolditalic')
     doc.setFontSize(14)
     doc.setTextColor(...PINK_ACCENT)
     doc.text(safeStudio.signature, W / 2, footerY + 20, { align: 'center' })

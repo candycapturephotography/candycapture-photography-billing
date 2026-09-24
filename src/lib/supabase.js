@@ -5,43 +5,77 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Helper to convert camelCase to snake_case for database
-const toSnakeCase = (obj) => {
+// Valid database columns for each table
+const INVOICE_COLUMNS = [
+  'id', 'invoice_number', 'customer_name', 'customer_mobile', 'customer_email',
+  'event_date', 'event_type', 'venue', 'selected_package_id', 'total_amount',
+  'paid_amount', 'status', 'items', 'payments', 'snapshot', 'notes', 'created_at'
+]
+
+const CUSTOMER_COLUMNS = ['id', 'name', 'mobile', 'email', 'invoice_ids', 'created_at']
+const SERVICE_COLUMNS = ['id', 'name', 'description', 'active', 'created_at']
+const PACKAGE_COLUMNS = ['id', 'name', 'price', 'description', 'services', 'active', 'created_at', 'updated_at']
+const STUDIO_COLUMNS = ['id', 'name', 'address', 'mobile', 'email', 'instagram', 'website', 'signature', 'logo']
+
+// Map camelCase field names to snake_case database columns
+const fieldMapping = {
+  invoiceNumber: 'invoice_number',
+  customerName: 'customer_name',
+  customerMobile: 'customer_mobile',
+  customerEmail: 'customer_email',
+  eventDate: 'event_date',
+  eventType: 'event_type',
+  location: 'venue',  // App uses 'location', DB uses 'venue'
+  selectedPackageId: 'selected_package_id',
+  totalAmount: 'total_amount',
+  paidAmount: 'paid_amount',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  invoiceIds: 'invoice_ids',
+}
+
+// Convert app object to database format, filtering only valid columns
+const toDbFormat = (obj, validColumns) => {
   if (!obj || typeof obj !== 'object') return obj
-  if (Array.isArray(obj)) return obj.map(toSnakeCase)
   
   const result = {}
   for (const [key, value] of Object.entries(obj)) {
-    // Handle special mappings
-    let snakeKey = key
-    if (key === 'location') snakeKey = 'venue'
-    else snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+    // Map field name
+    let dbKey = fieldMapping[key] || key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
     
-    // Handle nested objects (like snapshot, payments)
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      result[snakeKey] = value // Keep objects as-is for JSONB columns
-    } else if (Array.isArray(value)) {
-      result[snakeKey] = value // Keep arrays as-is for JSONB columns
-    } else {
-      result[snakeKey] = value
+    // Only include if it's a valid column
+    if (validColumns.includes(dbKey)) {
+      result[dbKey] = value
     }
   }
   return result
 }
 
-// Helper to convert snake_case to camelCase for app
-const toCamelCase = (obj) => {
+// Convert database object to app format (snake_case to camelCase)
+const toAppFormat = (obj) => {
   if (!obj || typeof obj !== 'object') return obj
-  if (Array.isArray(obj)) return obj.map(toCamelCase)
+  if (Array.isArray(obj)) return obj.map(toAppFormat)
+  
+  const reverseMapping = {
+    invoice_number: 'invoiceNumber',
+    customer_name: 'customerName',
+    customer_mobile: 'customerMobile',
+    customer_email: 'customerEmail',
+    event_date: 'eventDate',
+    event_type: 'eventType',
+    venue: 'location',  // DB uses 'venue', app uses 'location'
+    selected_package_id: 'selectedPackageId',
+    total_amount: 'totalAmount',
+    paid_amount: 'paidAmount',
+    created_at: 'createdAt',
+    updated_at: 'updatedAt',
+    invoice_ids: 'invoiceIds',
+  }
   
   const result = {}
   for (const [key, value] of Object.entries(obj)) {
-    // Handle special mappings
-    let camelKey = key
-    if (key === 'venue') camelKey = 'location'
-    else camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-    
-    result[camelKey] = value
+    const appKey = reverseMapping[key] || key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+    result[appKey] = value
   }
   return result
 }
@@ -55,17 +89,18 @@ export const db = {
       console.error('getCustomers error:', error)
       throw error
     }
-    return (data || []).map(toCamelCase)
+    return (data || []).map(toAppFormat)
   },
   
   async upsertCustomer(customer) {
-    const dbData = toSnakeCase(customer)
+    const dbData = toDbFormat(customer, CUSTOMER_COLUMNS)
+    console.log('Upserting customer:', dbData)
     const { data, error } = await supabase.from('customers').upsert(dbData).select()
     if (error) {
       console.error('upsertCustomer error:', error)
       throw error
     }
-    return toCamelCase(data?.[0])
+    return toAppFormat(data?.[0])
   },
   
   async deleteCustomer(id) {
@@ -83,29 +118,30 @@ export const db = {
       console.error('getInvoices error:', error)
       throw error
     }
-    return (data || []).map(toCamelCase)
+    return (data || []).map(toAppFormat)
   },
   
   async addInvoice(invoice) {
-    const dbData = toSnakeCase(invoice)
-    console.log('Saving invoice to Supabase:', dbData)
+    const dbData = toDbFormat(invoice, INVOICE_COLUMNS)
+    console.log('Adding invoice to Supabase:', dbData)
     const { data, error } = await supabase.from('invoices').insert(dbData).select()
     if (error) {
       console.error('addInvoice error:', error)
       throw error
     }
     console.log('Invoice saved successfully:', data)
-    return toCamelCase(data?.[0])
+    return toAppFormat(data?.[0])
   },
   
   async updateInvoice(id, updates) {
-    const dbData = toSnakeCase(updates)
+    const dbData = toDbFormat(updates, INVOICE_COLUMNS)
+    console.log('Updating invoice:', id, dbData)
     const { data, error } = await supabase.from('invoices').update(dbData).eq('id', id).select()
     if (error) {
       console.error('updateInvoice error:', error)
       throw error
     }
-    return toCamelCase(data?.[0])
+    return toAppFormat(data?.[0])
   },
   
   async deleteInvoice(id) {
@@ -123,17 +159,17 @@ export const db = {
       console.error('getServices error:', error)
       throw error
     }
-    return (data || []).map(toCamelCase)
+    return (data || []).map(toAppFormat)
   },
   
   async upsertService(service) {
-    const dbData = toSnakeCase(service)
+    const dbData = toDbFormat(service, SERVICE_COLUMNS)
     const { data, error } = await supabase.from('services').upsert(dbData).select()
     if (error) {
       console.error('upsertService error:', error)
       throw error
     }
-    return toCamelCase(data?.[0])
+    return toAppFormat(data?.[0])
   },
   
   async deleteService(id) {
@@ -151,17 +187,17 @@ export const db = {
       console.error('getPackages error:', error)
       throw error
     }
-    return (data || []).map(toCamelCase)
+    return (data || []).map(toAppFormat)
   },
   
   async upsertPackage(pkg) {
-    const dbData = toSnakeCase(pkg)
+    const dbData = toDbFormat(pkg, PACKAGE_COLUMNS)
     const { data, error } = await supabase.from('packages').upsert(dbData).select()
     if (error) {
       console.error('upsertPackage error:', error)
       throw error
     }
-    return toCamelCase(data?.[0])
+    return toAppFormat(data?.[0])
   },
   
   async deletePackage(id) {
@@ -179,16 +215,16 @@ export const db = {
       console.error('getStudio error:', error)
       throw error
     }
-    return data ? toCamelCase(data) : null
+    return data ? toAppFormat(data) : null
   },
   
   async saveStudio(studio) {
-    const dbData = { ...toSnakeCase(studio), id: 'main' }
+    const dbData = { ...toDbFormat(studio, STUDIO_COLUMNS), id: 'main' }
     const { data, error } = await supabase.from('studio').upsert(dbData).select()
     if (error) {
       console.error('saveStudio error:', error)
       throw error
     }
-    return toCamelCase(data?.[0])
+    return toAppFormat(data?.[0])
   },
 }
